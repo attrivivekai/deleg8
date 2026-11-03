@@ -97,8 +97,14 @@ class Config:
         raise KeyError(f"unknown repo {name!r}; configured: {[r.name for r in self.repos]}")
 
     @property
+    def name(self) -> str:
+        """Project name = config file stem (deleg8.yaml -> 'deleg8', acme.yaml -> 'acme')."""
+        return self.path.stem
+
+    @property
     def state_dir(self) -> Path:
-        d = self.root / ".deleg8"
+        # journal, lock, logs, reports: one folder per project config so projects never collide
+        d = self.root / ".deleg8" if self.name == "deleg8" else self.root / ".deleg8" / self.name
         d.mkdir(parents=True, exist_ok=True)
         return d
 
@@ -114,6 +120,9 @@ def _expand(value: Any) -> Any:
 
 
 def load_config(path: str | os.PathLike | None = None, harness: str | None = None) -> Config:
+    from deleg8.secrets import load_secrets_into_env
+
+    load_secrets_into_env()  # ${NAME} references resolve from ~/.config/deleg8/secrets.env
     path = Path(path or os.environ.get("DELEG8_CONFIG", "deleg8.yaml")).resolve()
     raw = _expand(yaml.safe_load(path.read_text()) or {})
     root = path.parent
@@ -152,5 +161,7 @@ def load_config(path: str | os.PathLike | None = None, harness: str | None = Non
         coding_agent=AgentConfig(**coding_raw),
         brain=AgentConfig(**brain_raw),
         policy=Policy(**raw.get("policy", {})),
-        workspace=rel(raw.get("workspace", ".deleg8/workspaces")),
+        workspace=rel(
+            raw.get("workspace", ".deleg8/workspaces" if path.stem == "deleg8" else f".deleg8/{path.stem}/workspaces")
+        ),
     )

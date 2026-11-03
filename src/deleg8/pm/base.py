@@ -46,6 +46,13 @@ class ProjectManager(ABC):
     @abstractmethod
     def mark_planned(self, ticket_id: str) -> None: ...
 
+    def assign(self, ticket_id: str) -> None:
+        """Hand an existing ticket to the AI employee (adds the `deleg8` label)."""
+        raise NotImplementedError(f"{self.name}: assign the ticket by adding the '{ASSIGN_LABEL}' label")
+
+    def unassign(self, ticket_id: str) -> None:
+        raise NotImplementedError(f"{self.name}: remove the '{ASSIGN_LABEL}' label from the ticket")
+
     def ref(self, ticket_id: str) -> str:
         """How to refer to a ticket in commits, PRs and comments."""
         return str(ticket_id)

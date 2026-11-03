@@ -1,0 +1,26 @@
+# deleg8 AI employee as a systemd *user* service, one instance per project config:
+#   deleg8@deleg8  -> ~/projects/deleg8/deleg8.yaml      deleg8@acme -> ~/projects/deleg8/acme.yaml
+# Installed by `dex install`; controlled with `dex start|stop|pause|resume|logs`.
+# It starts at login (if enabled) but only WORKS while the local model is loaded:
+# until then it idles with "waiting: ..." in the logs, and re-checks every 30s.
+[Unit]
+Description=deleg8 AI employee (%i)
+After=network-online.target llama-server.service augmentor-dsh.service
+StartLimitIntervalSec=600
+StartLimitBurst=5
+
+[Service]
+Type=exec
+WorkingDirectory=%h/projects/deleg8
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PYTHONUNBUFFERED=1
+ExecStart=%h/.local/bin/uv run --frozen deleg8 --config %h/projects/deleg8/%i.yaml work --interval 120
+Restart=on-failure
+RestartSec=30
+# Stopping kills the current agent run too; the ticket is picked up again on the next start.
+TimeoutStopSec=30
+# A normal stop (SIGTERM) is not a failure.
+SuccessExitStatus=143 SIGTERM
+
+[Install]
+WantedBy=default.target

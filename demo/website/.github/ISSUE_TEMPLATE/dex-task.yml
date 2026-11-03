@@ -1,0 +1,26 @@
+name: "Task for Dex"
+description: "A small, concrete change. Dex codes it, tests it and opens a PR."
+labels: ["deleg8", "type:task", "status:todo"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Filing this assigns the work to **Dex**, our AI junior engineer. Be specific: Dex asks questions
+        on the issue when something is unclear, and every PR still waits for a human review.
+  - type: textarea
+    id: what
+    attributes:
+      label: What and why
+      description: The problem or goal, and the context Dex needs (links, wiki pages, data to check).
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: A checklist of what "done" means. Dex adds tests for each item.
+      placeholder: |
+        - GET /api/x returns 200 with ...
+        - Tests cover ...
+    validations:
+      required: true

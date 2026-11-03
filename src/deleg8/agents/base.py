@@ -80,6 +80,10 @@ class CodingHarness(ABC):
         path.write_text(json.dumps(payload, indent=2, default=str))
         return str(path)
 
+    def ready(self) -> tuple[bool, str]:
+        """Can this harness take work right now? Local-model harnesses override this (model loaded?)."""
+        return True, ""
+
     @abstractmethod
     def think(self, prompt: str, schema: dict, cwd: Path, tag: str) -> AgentResult: ...
 

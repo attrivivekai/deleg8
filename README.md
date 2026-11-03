@@ -61,6 +61,18 @@ The seed backlog (`demo/tickets/seed.yaml`) is written like real PM tickets, and
   (all-time data says Starter, the correct 90-day metric says Team), plus an FAQ that uses the wiki's approved answers verbatim.
 * **Story: "make it better for enterprise"**: deliberately vague, so the employee should **ask questions, not guess**.
 
+## Control panel
+
+`http://127.0.0.1:8808`: an always-on local web console (`deleg8-panel` user service). It gives you:
+- an ON / PAUSE / OFF shift switch per project
+- model and harness readiness
+- a ticket board and ticket dispatch
+- an activity journal and live logs
+- a full config editor for the tracker, repos, harness, knowledge and policy, with secrets kept in
+  `~/.config/deleg8/secrets.env`
+
+Dex never starts by itself; the panel or `dex start` does that. **Day-to-day usage: [GUIDE.md](GUIDE.md).**
+
 ## Quick start
 
 ```bash
@@ -118,6 +130,8 @@ src/deleg8/
   circleci.py      CircleCI failure logs for the CI fix loop
   tools.py         wiki / SQL / ticket research tools   mcp_server.py   MCP wrapper
   scm.py           workspaces, git, PRs, CI checks, merge
+  panel/           control panel: server.py (stdlib HTTP + JSON API) + static/ (vanilla JS, bundled OFL fonts)
+  secrets.py       private secrets store (~/.config/deleg8/secrets.env)
   prompts.py       phase prompts + JSON output schemas
   journal.py       audit trail with cost/time
 demo/
@@ -125,7 +139,8 @@ demo/
   wiki/            company handbook        warehouse/   DuckDB builder
   infra/           Postgres "production" + seed + read-only role
   tickets/         seed backlog
-tests/             offline tests of the whole workflow with fake PM/harness/CI
+ops/               dex control script, systemd units (deleg8@.service, deleg8-panel.service)
+tests/             offline tests of the whole workflow with fake PM/harness/CI, plus panel API tests
 ```
 
 ## Limitations / next steps

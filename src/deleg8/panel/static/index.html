@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>deleg8 · Dispatch</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230a0c0f'/%3E%3Cpath d='M9 7h9l5 5v8l-5 5H9z' fill='none' stroke='%23ffb43c' stroke-width='3'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%2348f0a0'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-name">DELEG<b>8</b></span>
+      <span class="brand-sub">dispatch</span>
+    </div>
+    <div class="bus" id="bus" aria-label="System status"></div>
+    <div class="clock" id="clock">--:--:--</div>
+  </header>
+
+  <nav class="rail" aria-label="Main">
+    <div class="rail-project">
+      <label class="micro" for="project-select">Project</label>
+      <div class="project-row">
+        <select id="project-select"></select>
+        <button class="icon-btn" data-action="new-project" title="New project" aria-label="New project">+</button>
+      </div>
+    </div>
+    <a href="#overview" data-view="overview"><span class="nav-idx">01</span>Overview</a>
+    <a href="#tickets" data-view="tickets"><span class="nav-idx">02</span>Tickets</a>
+    <a href="#activity" data-view="activity"><span class="nav-idx">03</span>Activity</a>
+    <a href="#config" data-view="config"><span class="nav-idx">04</span>Config</a>
+    <a href="#logs" data-view="logs"><span class="nav-idx">05</span>Logs</a>
+    <div class="rail-foot micro">localhost only · <span id="rail-port"></span></div>
+  </nav>
+
+  <main id="main" tabindex="-1"></main>
+
+  <div class="toast-stack" id="toasts" aria-live="polite"></div>
+  <dialog id="modal"></dialog>
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -143,3 +143,63 @@ def test_commit_message_ticket_suffix_not_duplicated(cfg, fakes):
     pm.add("task", "Thing")
     emp.run_once()
     assert FakeWorkspace.instances[-1].pushed[0] == "feat: thing (#1)"
+
+
+class NotReadyHarness(ScriptedHarness):
+    def __init__(self, *a, ready=False, **kw):
+        super().__init__(*a, **kw)
+        self.is_ready = ready
+
+    def ready(self):
+        return (True, "") if self.is_ready else (False, "model not loaded")
+
+
+def test_waits_while_model_not_loaded(cfg, fakes):
+    pm = FakePM()
+    t = pm.add("task", "Small change")
+    coder = NotReadyHarness({"work": [WORK]})
+    emp = Employee(cfg, pm=pm, coder=coder, brain=ScriptedHarness({"review": [APPROVE]}), journal=fakes)
+    assert emp.run_once() == 0 and coder.calls == [] and pm.get(t.id).status == "todo"
+    coder.is_ready = True
+    assert emp.run_once() > 0 and coder.calls
+
+
+def test_model_lost_mid_task_requeues_instead_of_blocking(cfg, fakes):
+    pm = FakePM()
+    t = pm.add("task", "Small change")
+    coder = NotReadyHarness({"work": [{}]}, ready=True)  # empty result = harness failure
+
+    def drop_model(tag):
+        coder.is_ready = False
+
+    coder.on_work = drop_model
+    emp = Employee(cfg, pm=pm, coder=coder, brain=ScriptedHarness({}), journal=fakes)
+    assert emp.run_once() == 0
+    assert pm.get(t.id).status == "todo"
+    assert not any("Internal error" in c.body for c in pm.get(t.id).comments)
+
+
+def test_pause_file_stops_new_work(cfg, fakes):
+    pm, emp, coder, _ = make(cfg, fakes, {"review": [APPROVE]})
+    pm.add("task", "A")
+    emp.pause_file.touch()
+    assert emp.run_once() == 0 and not coder.calls
+    emp.pause_file.unlink()
+    assert emp.run_once() > 0
+
+
+def test_state_dir_is_per_project(cfg, tmp_path):
+    from deleg8.config import load_config
+
+    other = tmp_path / "acme.yaml"
+    other.write_text(cfg.path.read_text())
+    assert load_config(other).state_dir == tmp_path / ".deleg8" / "acme"
+    assert load_config(other).workspace == tmp_path / ".deleg8" / "acme" / "workspaces"
+
+
+def test_waiting_for_human_review_is_not_busy_work(cfg, fakes):
+    cfg.policy.auto_merge = False
+    pm, emp, _, _ = make(cfg, fakes, {"review": [APPROVE]})
+    pm.add("task", "Small change")
+    emp.run_once()  # opens the PR and hands off
+    assert emp.run_once() == 0  # PR still open, nothing to do: the loop should sleep, not spin

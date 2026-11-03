@@ -3,6 +3,7 @@ services:
   prod-db:
     image: postgres:16-alpine
     container_name: deleg8-prod-db
+    restart: unless-stopped
     environment:
       POSTGRES_USER: deleg8
       POSTGRES_PASSWORD: deleg8

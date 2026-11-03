@@ -229,11 +229,51 @@ def cmd_seed(cfg: Config, args) -> int:
     return 0
 
 
+def cmd_setup(cfg: Config, _args) -> int:
+    """Prepare the PM tool for a project (labels/states). Safe to re-run; never touches code repos."""
+    from deleg8.pm.base import make_pm
+
+    print(f"setting up project '{cfg.name}' ({cfg.pm.get('provider')})")
+    make_pm(cfg).setup()
+    ok("labels / states ready in the PM tool")
+    return cmd_doctor(cfg, _args)
+
+
+def cmd_new(cfg: Config, args) -> int:
+    from deleg8.pm.base import make_pm
+
+    body = args.body or ""
+    if args.body_file:
+        body = Path(args.body_file).read_text()
+    if not body.strip():
+        print("tip: write acceptance criteria in --body/--body-file; vague tickets get questions, not code")
+    t = make_pm(cfg).create(args.type, args.title, body, assign=not args.no_assign)
+    ok(
+        f"created {t.id} [{args.type}] {t.title} -> {t.url}"
+        + ("" if args.no_assign else f" (assigned to {cfg.employee.name})")
+    )
+    return 0
+
+
+def cmd_assign(cfg: Config, args) -> int:
+    from deleg8.pm.base import make_pm
+
+    pm = make_pm(cfg)
+    for tid in args.tickets:
+        (pm.unassign if args.cmd == "unassign" else pm.assign)(tid)
+        ok(f"{'unassigned' if args.cmd == 'unassign' else 'assigned'} {tid}")
+    return 0
+
+
 def cmd_run(cfg: Config, args) -> int:
     from deleg8.employee import Employee
 
     _lock = lock(cfg)
     emp = Employee(cfg)
+    ready, why = emp.ready()
+    if not ready:
+        print(f"not ready: {why}")
+        return 3
     if args.ticket:  # work a single ticket now, regardless of the queue
         t = emp.pm.get(args.ticket)
         emp._guard(t, emp.plan if t.is_container else emp.execute)
@@ -244,8 +284,11 @@ def cmd_run(cfg: Config, args) -> int:
 
 
 def cmd_work(cfg: Config, args) -> int:
+    import signal
+
     from deleg8.employee import Employee
 
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))  # `dex stop` / panel OFF is a clean exit
     _lock = lock(cfg)
     print(f"{cfg.employee.name} is on shift. Polling every {args.interval}s (Ctrl-C to stop)")
     Employee(cfg).work(args.interval, args.max_idle)
@@ -320,11 +363,28 @@ def main(argv: list[str] | None = None) -> None:
     w.add_argument("--interval", type=int, default=60)
     w.add_argument("--max-idle", type=int, default=None, help="exit after N idle passes")
     sub.add_parser("status")
+    sub.add_parser("setup", help="prepare the PM tool for this project (labels/states) + doctor")
+    n = sub.add_parser("new", help="create a ticket and assign it to the AI employee")
+    n.add_argument("title")
+    n.add_argument("--type", choices=["task", "bug", "story", "epic"], default="task")
+    n.add_argument("--body", default="")
+    n.add_argument("--body-file")
+    n.add_argument("--no-assign", action="store_true")
+    for name in ("assign", "unassign"):
+        a = sub.add_parser(name, help=f"{name} existing tickets (the `deleg8` label)")
+        a.add_argument("tickets", nargs="+")
     t = sub.add_parser("tool")
     t.add_argument("name")
     t.add_argument("args", nargs="*")
     sub.add_parser("mcp")
+    pn = sub.add_parser("panel", help="run the web control panel (http://127.0.0.1:8808)")
+    pn.add_argument("--port", type=int, default=8808)
     args = ap.parse_args(argv)
+    if args.cmd == "panel":  # needs no project config; works even if a config is broken
+        from deleg8.panel.server import serve
+
+        serve(args.port)
+        return
 
     cfg = load_config(args.config, harness=args.harness)
     if args.pm or os.environ.get("DELEG8_PM"):
@@ -343,6 +403,10 @@ def main(argv: list[str] | None = None) -> None:
         "work": cmd_work,
         "status": cmd_status,
         "tool": cmd_tool,
+        "setup": cmd_setup,
+        "new": cmd_new,
+        "assign": cmd_assign,
+        "unassign": cmd_assign,
     }[args.cmd]
     try:
         sys.exit(handler(cfg, args))

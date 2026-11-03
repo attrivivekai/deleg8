@@ -164,5 +164,11 @@ class Jira(ProjectManager):
                 self._req("POST", f"/issue/{ticket_id}/transitions", json={"transition": {"id": t["id"]}})
                 return
 
+    def assign(self, ticket_id: str) -> None:
+        self._labels(ticket_id, add=[ASSIGN_LABEL])
+
+    def unassign(self, ticket_id: str) -> None:
+        self._labels(ticket_id, remove=[ASSIGN_LABEL])
+
     def mark_planned(self, ticket_id: str) -> None:
         self._labels(ticket_id, add=[PLANNED])

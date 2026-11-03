@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# dex: control your deleg8 AI employee ("Dex").
+#
+#   dex install            install the services + this command, start the web panel (once)
+#   dex panel              open the control panel (http://127.0.0.1:8808)
+#   dex start | stop       start / stop now (stop also aborts the ticket in progress; it's retried later)
+#   dex pause | resume     finish the current ticket, then idle  /  continue working
+#   dex enable | disable   start automatically at login (or not)
+#   dex status             service state, model readiness and Dex's ticket board
+#   dex logs               follow what Dex is doing (Ctrl-C to quit)
+#   dex once [TICKET]      one pass in the foreground (or work one ticket now), without the service
+#   dex new "Title" [--type task|bug|story|epic] [--body "..."]   create + assign a ticket
+#   dex assign N [N...]    hand existing tickets to Dex     dex unassign N
+#   dex doctor | setup     check everything / prepare a new project's tracker
+#
+# Multiple projects: `dex -p acme <command>` uses acme.yaml (default: deleg8.yaml). Or export DEX_PROJECT=acme.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+PROJECT="${DEX_PROJECT:-deleg8}"
+if [[ "${1:-}" == "-p" ]]; then PROJECT="$2"; shift 2; fi
+UNIT="deleg8@${PROJECT}.service"
+CONFIG="$ROOT/${PROJECT}.yaml"
+UV="${UV:-$(command -v uv || echo "$HOME/.local/bin/uv")}"
+
+deleg8() { (cd "$ROOT" && "$UV" run --frozen deleg8 --config "$CONFIG" "$@"); }
+state_dir() { if [[ "$PROJECT" == "deleg8" ]]; then echo "$ROOT/.deleg8"; else echo "$ROOT/.deleg8/$PROJECT"; fi; }
+need_config() { [[ -f "$CONFIG" ]] || { echo "no config at $CONFIG (copy deleg8.yaml to ${PROJECT}.yaml first)"; exit 1; }; }
+
+cmd="${1:-help}"; shift || true
+case "$cmd" in
+  install)
+    mkdir -p "$HOME/.config/systemd/user" "$HOME/.local/bin"
+    cp "$ROOT/ops/deleg8@.service" "$ROOT/ops/deleg8-panel.service" "$HOME/.config/systemd/user/"
+    ln -sf "$ROOT/ops/dex" "$HOME/.local/bin/dex"
+    systemctl --user daemon-reload
+    systemctl --user enable --now deleg8-panel.service
+    echo "installed: control panel (always on) at http://127.0.0.1:8808, employee service template, 'dex' command"
+    echo "Dex itself stays OFF until you switch it on in the panel (or run: dex start)"
+    ;;
+  uninstall)
+    systemctl --user disable --now "$UNIT" 2>/dev/null || true
+    systemctl --user disable --now deleg8-panel.service 2>/dev/null || true
+    rm -f "$HOME/.config/systemd/user/deleg8@.service" "$HOME/.config/systemd/user/deleg8-panel.service" "$HOME/.local/bin/dex"
+    systemctl --user daemon-reload; echo "removed service and dex command (your config and data are untouched)"
+    ;;
+  start)   need_config; rm -f "$(state_dir)/paused"; systemctl --user start "$UNIT"; echo "Dex started ($PROJECT). Follow along: dex logs" ;;
+  stop)    systemctl --user stop "$UNIT"; rm -f "$(state_dir)/paused"; echo "Dex stopped ($PROJECT)" ;;
+  restart) need_config; systemctl --user restart "$UNIT"; echo "Dex restarted ($PROJECT)" ;;
+  enable)  need_config; rm -f "$(state_dir)/paused"; systemctl --user enable --now "$UNIT"; echo "Dex will start at every login ($PROJECT)" ;;
+  disable) systemctl --user disable --now "$UNIT"; echo "Dex stopped and won't start at login ($PROJECT)" ;;
+  pause)   mkdir -p "$(state_dir)"; touch "$(state_dir)/paused"; echo "Dex will finish the current ticket, then idle. Undo: dex resume" ;;
+  resume)  rm -f "$(state_dir)/paused"; echo "Dex resumed ($PROJECT)" ;;
+  logs)    journalctl --user -u "$UNIT" -f -o cat ;;
+  panel)   echo "http://127.0.0.1:8808"; (xdg-open "http://127.0.0.1:8808" >/dev/null 2>&1 &) ;;
+  status)
+    need_config
+    echo "service:  $(systemctl --user is-active "$UNIT" 2>/dev/null || true) ($(systemctl --user is-enabled "$UNIT" 2>/dev/null || echo not-installed))"
+    [[ -f "$(state_dir)/paused" ]] && echo "paused:   yes (dex resume)"
+    echo "last log: $(journalctl --user -u "$UNIT" -n 1 -o cat 2>/dev/null | tail -1)"
+    echo; deleg8 status
+    ;;
+  once)    need_config; if [[ -n "${1:-}" ]]; then deleg8 run --ticket "$1"; else deleg8 run; fi ;;
+  new|assign|unassign|doctor|setup|tool|seed) need_config; deleg8 "$cmd" "$@" ;;
+  help|-h|--help) sed -n '2,19p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
+  *) echo "unknown command: $cmd (try: dex help)"; exit 1 ;;
+esac

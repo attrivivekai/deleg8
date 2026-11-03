@@ -164,5 +164,14 @@ class GitHubIssues(ProjectManager):
         add = [] if f"status:{status}" in current.labels else [f"status:{status}"]
         self._edit_labels(ticket_id, add, stale)
 
+    def assign(self, ticket_id: str) -> None:
+        t = self.get(ticket_id)
+        self._edit_labels(
+            ticket_id, [ASSIGN_LABEL] + ([] if any(x.startswith("status:") for x in t.labels) else ["status:todo"]), []
+        )
+
+    def unassign(self, ticket_id: str) -> None:
+        self._edit_labels(ticket_id, [], [ASSIGN_LABEL])
+
     def mark_planned(self, ticket_id: str) -> None:
         self._edit_labels(ticket_id, [PLANNED_LABEL], [])

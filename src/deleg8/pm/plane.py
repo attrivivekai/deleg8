@@ -299,6 +299,20 @@ class Plane(ProjectManager):
         assert status in STATUSES, status
         self._req("PATCH", self._items_path(self._uuid(ticket_id)), json={"state": self._state_id(status)})
 
+    def _set_label(self, ticket_id: str, name: str, present: bool) -> None:
+        uuid = self._uuid(ticket_id)
+        item = self._req("GET", self._items_path(uuid))
+        current = [lbl["id"] if isinstance(lbl, dict) else lbl for lbl in item.get("labels") or []]
+        lid = self._label_id(name)
+        new = [*current, lid] if present and lid not in current else [x for x in current if x != lid or present]
+        self._req("PATCH", self._items_path(uuid), json={"labels": new})
+
+    def assign(self, ticket_id: str) -> None:
+        self._set_label(ticket_id, ASSIGN_LABEL, True)
+
+    def unassign(self, ticket_id: str) -> None:
+        self._set_label(ticket_id, ASSIGN_LABEL, False)
+
     def mark_planned(self, ticket_id: str) -> None:
         uuid = self._uuid(ticket_id)
         item = self._req("GET", self._items_path(uuid))

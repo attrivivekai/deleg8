@@ -32,6 +32,10 @@ from deleg8.prompts import (
 from deleg8.scm import GitHubPRs, Workspace, slugify
 
 
+class ModelUnavailable(Exception):
+    """The (local) model went away: stop the pass, leave tickets for the next one."""
+
+
 class Blocked(Exception):
     """The employee needs a human: posts the message on the ticket and marks it blocked."""
 
@@ -53,10 +57,42 @@ class Employee:
         self.sig = cfg.employee.signature
 
     # ================================================================ loop
+    @property
+    def pause_file(self):
+        return self.cfg.state_dir / "paused"
+
+    def ready(self) -> tuple[bool, str]:
+        """Not paused, and both harnesses can take work (for local models: the model is loaded and served)."""
+        if self.pause_file.exists():
+            return False, "paused (run `dex resume` to continue)"
+        notes = []
+        for h in (self.coder, self.brain):
+            ok, why = h.ready() if hasattr(h, "ready") else (True, "")
+            if not ok:
+                return False, why
+            if why and why not in notes:
+                notes.append(why)
+        return True, " / ".join(notes) or "harness available"
+
     def run_once(self) -> int:
         """One pass over the backlog. Returns the number of actions taken."""
+        ok, why = self.ready()
+        if not ok:
+            self.journal.log("-", "waiting", why, echo_only=True)
+            return 0
+        try:
+            return self._pass()
+        except ModelUnavailable as e:
+            self.journal.log("-", "paused", f"model became unavailable mid-pass: {e}")
+            return 0
+
+    def _pass(self) -> int:
         actions = 0
         tickets = self.pm.assigned()
+        counts: dict[str, int] = {}
+        for t in tickets:
+            counts[t.status] = counts.get(t.status, 0) + 1
+        self.board = ", ".join(f"{n} {st}" for st, n in sorted(counts.items())) or "no open tickets"
 
         for t in tickets:  # 1. humans answered my questions? -> back to todo
             if t.status == "blocked" and t.human_replied_since_agent():
@@ -80,8 +116,8 @@ class Employee:
             if executed >= self.cfg.policy.max_tasks_per_run:
                 break
             if t.status == "in-review":
-                self._guard(t, self.resume_review)
-                actions += 1
+                if self._guard(t, self.resume_review) is not False:  # False = still waiting on a human
+                    actions += 1
                 continue
             if all(self._is_done(d, done_ids) for d in t.depends_on):
                 self._guard(t, self.execute)
@@ -97,9 +133,26 @@ class Employee:
         return actions
 
     def work(self, interval_s: int = 60, max_idle_passes: int | None = None) -> None:
-        idle = 0
+        idle, waiting, last_board = 0, None, None
+        ok, why = self.ready()
+        print(f"[{time.strftime('%H:%M:%S')}] {'ready: ' + why if ok else 'waiting: ' + why}", flush=True)
+        waiting = None if ok else why
         while True:
+            ok, why = self.ready()
+            if not ok:  # e.g. no local model loaded: idle quietly (logged once per change), check every 30s
+                if why != waiting:
+                    print(f"[{time.strftime('%H:%M:%S')}] waiting: {why}", flush=True)
+                    waiting = why
+                time.sleep(min(interval_s, 30))
+                continue
+            if waiting:
+                print(f"[{time.strftime('%H:%M:%S')}] ready: {self.ready()[1] or 'harness available'}", flush=True)
+                waiting = None
             n = self.run_once()
+            board = getattr(self, "board", None)
+            if board and board != last_board:  # heartbeat: show the board whenever it changes
+                print(f"[{time.strftime('%H:%M:%S')}] board: {board}", flush=True)
+                last_board = board
             idle = 0 if n else idle + 1
             if max_idle_passes is not None and idle >= max_idle_passes:
                 return
@@ -110,9 +163,11 @@ class Employee:
             cache[ticket_id] = self.pm.get(ticket_id).status == "done"
         return cache[ticket_id]
 
-    def _guard(self, t: Ticket, fn) -> None:
+    def _guard(self, t: Ticket, fn):
+        if self.pause_file.exists():  # paused mid-pass: finish the current ticket, start no new ones
+            raise ModelUnavailable("paused by user")
         try:
-            fn(t)
+            return fn(t)
         except Blocked as e:
             self.pm.set_status(t.id, "blocked")
             self.pm.comment(
@@ -122,6 +177,11 @@ class Employee:
             )
             self.journal.log(t.id, "blocked", str(e).splitlines()[0][:200])
         except Exception as e:  # infra failure: park the ticket, keep the loop alive
+            ok, why = self.ready()
+            if not ok:  # not the ticket's fault: the model went away. Retry later, don't block.
+                self.pm.set_status(t.id, "todo")
+                self.journal.log(t.id, "paused", f"model unavailable, will retry: {why}")
+                raise ModelUnavailable(why) from e
             self.pm.set_status(t.id, "blocked")
             self.pm.comment(
                 t.id, f"⚠️ Internal error while working on this ticket:\n```\n{str(e)[-1500:]}\n```", self.sig
@@ -373,14 +433,15 @@ class Employee:
         )
         self.journal.log(t.id, "done", "merged and closed", link=pr["url"])
 
-    def resume_review(self, t: Ticket) -> None:
+    def resume_review(self, t: Ticket) -> bool:
+        """Follow up on a ticket whose PR is open. Returns False when nothing changed (waiting on a human)."""
         repo = self.cfg.repo(t.repo)
         branch = f"deleg8/{t.id}-{slugify(t.title)}"
         prs = GitHubPRs(repo)
         pr = prs.find(branch)
         if not pr:
             self.pm.set_status(t.id, "todo")
-            return
+            return True
         if pr["state"] == "MERGED":
             self._complete(t, pr, {"summary": "Merged by a human reviewer."}, repo)
         elif pr["state"] == "CLOSED":
@@ -389,6 +450,9 @@ class Employee:
             ws = Workspace(self.cfg, repo)
             ws.prepare(branch)
             self._review_ci_merge(t, ws, prs, pr, {"summary": "Resumed after interruption."}, skip_review=True)
+        else:
+            return False
+        return True
 
     # =========================================================== reporting
     def finalize(self, t: Ticket, kids: list[Ticket]) -> None:

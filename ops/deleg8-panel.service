@@ -1,0 +1,17 @@
+# deleg8 control panel: always-on local web UI at http://127.0.0.1:8808 (starts at login).
+# It never starts the AI employee by itself; use the panel's ON switch (or `dex start`).
+[Unit]
+Description=deleg8 control panel (http://127.0.0.1:8808)
+After=network-online.target
+
+[Service]
+Type=exec
+WorkingDirectory=%h/projects/deleg8
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PYTHONUNBUFFERED=1
+ExecStart=%h/.local/bin/uv run --frozen deleg8 panel --port 8808
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

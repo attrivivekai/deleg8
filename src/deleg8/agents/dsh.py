@@ -86,6 +86,28 @@ class DeepSeekHarness(CodingHarness):
             "context_window": model.get("contextWindow"),
         }
 
+    def ready(self) -> tuple[bool, str]:
+        """Ready = dsh is installed AND the model in DSH settings is being served by the model server."""
+        import shutil
+        import urllib.request
+
+        cmd = self.base_command()
+        if not (shutil.which(cmd[0]) or Path(cmd[0]).exists()) or any(
+            not Path(c).exists() for c in cmd[1:] if c.startswith("/")
+        ):
+            return False, f"dsh not found: {' '.join(cmd)}"
+        info = self.model_info()
+        if not info.get("model") or not info.get("base_url"):
+            return False, f"no default model in {info.get('home')}/settings.yaml"
+        try:
+            with urllib.request.urlopen(f"{info['base_url'].rstrip('/')}/models", timeout=5) as r:
+                served = [m.get("id") for m in json.load(r).get("data", [])]
+        except Exception:
+            return False, f"local model server not reachable at {info['base_url']} (start a model in the panel)"
+        if info["model"] not in served:
+            return False, f"waiting for model {info['model']!r} (server is serving {served})"
+        return True, f"{info['model']} ({info.get('context_window') or '?'} ctx)"
+
     def _run(self, prompt: str, schema: dict, cwd: Path, tag: str, write: bool) -> AgentResult:
         mode = (self.agent_cfg.permission_mode or "workspace-write") if write else "read-only"
         if mode not in PERMISSION_MODES:

@@ -21,6 +21,12 @@ class FakePM(ProjectManager):
         )
         return self.tickets[tid]
 
+    def assign(self, ticket_id):
+        self.tickets[str(ticket_id)].assigned = True
+
+    def unassign(self, ticket_id):
+        self.tickets[str(ticket_id)].assigned = False
+
     def ref(self, ticket_id):
         return f"#{ticket_id}"
 
@@ -127,7 +133,7 @@ class FakePRs:
         self.repo = repo
 
     def find(self, branch):
-        return None
+        return {"number": 7, "url": "https://gh/pr/7", "state": "OPEN"}
 
     def open(self, branch, title, body):
         return {"number": 7, "url": "https://gh/pr/7", "state": "OPEN"}

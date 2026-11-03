@@ -54,3 +54,9 @@ def fakes(monkeypatch, cfg):
     monkeypatch.setattr(employee_mod, "Workspace", FakeWorkspace)
     monkeypatch.setattr(employee_mod, "GitHubPRs", FakePRs)
     return Journal(cfg.state_dir / "journal.db")
+
+
+@pytest.fixture(autouse=True)
+def _isolated_secrets(tmp_path_factory, monkeypatch):
+    """Never let tests read or write the real ~/.config/deleg8/secrets.env."""
+    monkeypatch.setenv("DELEG8_SECRETS", str(tmp_path_factory.mktemp("secrets") / "secrets.env"))

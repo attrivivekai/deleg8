@@ -25,7 +25,11 @@ class Journal:
         cost_usd: float = 0.0,
         duration_s: float = 0.0,
         link: str = "",
+        echo_only: bool = False,
     ) -> None:
+        if echo_only:  # transient status (e.g. waiting for a model): print, don't journal
+            print(f"[{time.strftime('%H:%M:%S')}] {phase:<10} {message}", flush=True)
+            return
         self.db.execute(
             "INSERT INTO events (ts, ticket, phase, message, cost_usd, duration_s, link) VALUES (?,?,?,?,?,?,?)",
             (time.time(), str(ticket), phase, message, cost_usd, duration_s, link),
