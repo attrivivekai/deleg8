@@ -8,7 +8,6 @@ import time
 from pathlib import Path
 
 from deleg8.agents.base import AgentResult, CodingHarness
-from deleg8.shell import clean_env
 
 READ_ONLY_TOOLS = [
     "Read",
@@ -58,7 +57,7 @@ class ClaudeCode(CodingHarness):
                 text=True,
                 capture_output=True,
                 timeout=self.agent_cfg.timeout_s,
-                env=clean_env(),
+                env=self.agent_cfg.child_env(),
             )
         except subprocess.TimeoutExpired:
             return AgentResult(

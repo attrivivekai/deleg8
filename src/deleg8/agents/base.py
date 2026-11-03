@@ -111,6 +111,10 @@ def make_harness(cfg: Config, role: str = "coding") -> CodingHarness:
         from deleg8.agents.claude_code import ClaudeCode
 
         return ClaudeCode(cfg, agent_cfg)
+    if agent_cfg.provider == "dsh":
+        from deleg8.agents.dsh import DeepSeekHarness
+
+        return DeepSeekHarness(cfg, agent_cfg)
     if agent_cfg.provider == "pi":
         from deleg8.agents.pi import Pi
 

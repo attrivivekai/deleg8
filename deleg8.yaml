@@ -3,11 +3,22 @@ employee:
   name: Dex
   title: Junior Software Engineer (AI)
 
-# Where work comes from. github = GitHub Issues (free). See src/deleg8/pm/jira.py for Jira Cloud.
+# Where work comes from: github (GitHub Issues) | plane (open source, self-hosted or cloud) | jira (Jira Cloud).
+# Switch without editing: `deleg8 --pm plane <command>` or DELEG8_PM=plane.
 pm:
   provider: github
   github:
     repo: attrivivekai/deleg8-website
+  plane:
+    base_url: ${PLANE_BASE_URL}       # http://localhost (self-hosted) or https://api.plane.so (cloud)
+    api_key: ${PLANE_API_KEY}         # Plane: Profile settings -> Personal access tokens
+    workspace: ${PLANE_WORKSPACE}     # workspace slug from the URL
+    project: DEL                      # project identifier
+  jira:
+    base_url: ${JIRA_BASE_URL}        # https://<site>.atlassian.net
+    email: ${JIRA_EMAIL}
+    api_token: ${JIRA_API_TOKEN}
+    project: DEL
 
 # Repos the employee may change. `checks` must pass locally before a PR is opened.
 repos:
@@ -45,6 +56,32 @@ brain:
   model: claude-opus-5-5
   max_budget_usd: 3
   timeout_s: 900
+
+# Named harness presets. Run with `deleg8 --harness dsh <command>` (or DELEG8_HARNESS=dsh) to swap both
+# roles above for a preset without editing this file.
+harnesses:
+  # DeepSeek Harness on a LOCAL model, reusing the local-ai panel (~/local-ai): whatever model you start in
+  # the panel (llama-server :8080) is what Dex uses, because the panel keeps this DSH home's settings.yaml in sync.
+  dsh:
+    coding_agent:
+      provider: dsh
+      command: ["/usr/lib/augmentor/node/bin/node",
+                "~/.local/share/augmentor/dsh-runtime/node_modules/@deepseek-ai/dsh/lib/bin.js"]
+      env:
+        DSH_HOME: ~/.local/share/augmentor/dsh-home
+        DSH_TELEMETRY_MODE: DISABLED
+      env_file: ~/.local/state/augmentor-install/model.env   # AUGMENTOR_MODEL_API_KEY for the local provider
+      permission_mode: workspace-write   # use danger-full-access if the sandbox blocks test runs
+      timeout_s: 3600                    # local models are slower; one task may take a while
+    brain:
+      provider: dsh
+      command: ["/usr/lib/augmentor/node/bin/node",
+                "~/.local/share/augmentor/dsh-runtime/node_modules/@deepseek-ai/dsh/lib/bin.js"]
+      env:
+        DSH_HOME: ~/.local/share/augmentor/dsh-home
+        DSH_TELEMETRY_MODE: DISABLED
+      env_file: ~/.local/state/augmentor-install/model.env
+      timeout_s: 1800                    # planning / review / reports always run read-only
 
 policy:
   auto_merge: false       # every PR waits for a human (repo owner) review + merge

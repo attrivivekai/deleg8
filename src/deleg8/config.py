@@ -36,11 +36,30 @@ class RepoConfig:
 
 @dataclass
 class AgentConfig:
-    provider: str = "claude_code"  # claude_code | pi
+    provider: str = "claude_code"  # claude_code | pi | dsh
     model: str = ""
     max_budget_usd: float = 5.0
     timeout_s: int = 1800
     extra_args: list[str] = field(default_factory=list)
+    command: list[str] = field(default_factory=list)  # override the harness executable (e.g. node + bin.js)
+    env: dict[str, str] = field(default_factory=dict)  # extra env vars for the harness process
+    env_file: str = ""  # KEY=VALUE file merged into the env (e.g. a local model's API key)
+    permission_mode: str = ""  # dsh: sandbox mode for work() (read-only is always used for think())
+
+    def child_env(self) -> dict[str, str]:
+        from deleg8.shell import clean_env
+
+        env = {}
+        if self.env_file:
+            path = Path(os.path.expanduser(self.env_file))
+            if path.is_file():
+                for line in path.read_text().splitlines():
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, v = line.split("=", 1)
+                        env[k.removeprefix("export ").strip()] = v.strip().strip('"').strip("'")
+        env.update({k: os.path.expanduser(str(v)) for k, v in self.env.items()})
+        return clean_env(env)
 
 
 @dataclass
@@ -94,7 +113,7 @@ def _expand(value: Any) -> Any:
     return value
 
 
-def load_config(path: str | os.PathLike | None = None) -> Config:
+def load_config(path: str | os.PathLike | None = None, harness: str | None = None) -> Config:
     path = Path(path or os.environ.get("DELEG8_CONFIG", "deleg8.yaml")).resolve()
     raw = _expand(yaml.safe_load(path.read_text()) or {})
     root = path.parent
@@ -112,6 +131,16 @@ def load_config(path: str | os.PathLike | None = None) -> Config:
             spec["url"] = f"{scheme}:///{rel(p)}"
         dbs[name] = spec
 
+    coding_raw = raw.get("coding_agent", {})
+    brain_raw = raw.get("brain", coding_raw)
+    harness = harness or os.environ.get("DELEG8_HARNESS")
+    if harness:  # named preset from `harnesses:` replaces both roles (e.g. --harness dsh for local models)
+        presets = raw.get("harnesses", {})
+        if harness not in presets:
+            raise KeyError(f"unknown harness preset {harness!r}; defined: {list(presets)}")
+        coding_raw = presets[harness].get("coding_agent", presets[harness])
+        brain_raw = presets[harness].get("brain", coding_raw)
+
     return Config(
         root=root,
         path=path,
@@ -120,8 +149,8 @@ def load_config(path: str | os.PathLike | None = None) -> Config:
         repos=[RepoConfig(**r) for r in raw.get("repos", [])],
         wiki_dirs=[rel(p) for p in raw.get("knowledge", {}).get("wiki_dirs", [])],
         databases=dbs,
-        coding_agent=AgentConfig(**raw.get("coding_agent", {})),
-        brain=AgentConfig(**raw.get("brain", raw.get("coding_agent", {}))),
+        coding_agent=AgentConfig(**coding_raw),
+        brain=AgentConfig(**brain_raw),
         policy=Policy(**raw.get("policy", {})),
         workspace=rel(raw.get("workspace", ".deleg8/workspaces")),
     )

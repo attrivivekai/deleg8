@@ -133,13 +133,33 @@ class GitHubPRs:
             buckets = {c["bucket"] for c in checks}
             summary = ", ".join(f"{c['name']}={c['bucket']}" for c in checks)
             if "fail" in buckets or "cancel" in buckets:
-                return CheckResult("fail", summary, self.failed_logs(number))
+                failed = [c for c in checks if c["bucket"] in ("fail", "cancel")]
+                return CheckResult("fail", summary, self.failed_logs(number, failed))
             if buckets <= {"pass", "skipping"}:
                 return CheckResult("pass", summary)
             time.sleep(15)
         return CheckResult("pending", "timed out waiting for CI")
 
-    def failed_logs(self, number: int) -> str:
+    def failed_logs(self, number: int, failed_checks: list[dict] | None = None) -> str:
+        """Logs for failed checks: GitHub Actions via gh, CircleCI via its API, others as name + link."""
+        from deleg8 import circleci
+
+        parts = []
+        for c in failed_checks or []:
+            link = c.get("link") or ""
+            if circleci.is_circleci(link):
+                try:
+                    parts.append(f"### CircleCI: {c['name']}\n{circleci.failed_step_log(link)}")
+                except Exception as e:  # never let log fetching break the workflow
+                    parts.append(f"### CircleCI: {c['name']} failed ({link}); log fetch error: {e}")
+            elif "github.com" not in link:
+                parts.append(f"### {c['name']} failed: {link}")
+        actions = self._actions_failed_logs(number)
+        if actions:
+            parts.insert(0, f"### GitHub Actions\n{actions}")
+        return "\n\n".join(parts)[-8000:]
+
+    def _actions_failed_logs(self, number: int) -> str:
         branch = gh_json(["pr", "view", str(number), *self.r, "--json", "headRefName"])["headRefName"]
         runs = (
             gh_json(

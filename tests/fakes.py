@@ -21,6 +21,9 @@ class FakePM(ProjectManager):
         )
         return self.tickets[tid]
 
+    def ref(self, ticket_id):
+        return f"#{ticket_id}"
+
     def assigned(self):
         return [t for t in self.tickets.values() if t.assigned and t.status != "done"]
 
@@ -61,7 +64,8 @@ class ScriptedHarness:
         self.on_work = on_work
 
     def _next(self, tag: str) -> AgentResult:
-        kind = tag.rsplit("-", 1)[0]
+        kinds = ["review-fix", "ci-fix", "plan", "work", "fix", "review", "report"]
+        kind = next(k for k in kinds if tag.startswith(k + "-"))
         self.calls.append((kind, tag))
         queue = self.responses.get(kind) or []
         data = queue.pop(0) if len(queue) > 1 else (queue[0] if queue else {})

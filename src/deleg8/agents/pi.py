@@ -12,7 +12,6 @@ import time
 from pathlib import Path
 
 from deleg8.agents.base import AgentResult, CodingHarness, extract_json_block
-from deleg8.shell import clean_env
 
 
 class Pi(CodingHarness):
@@ -38,7 +37,7 @@ class Pi(CodingHarness):
                 text=True,
                 capture_output=True,
                 timeout=self.agent_cfg.timeout_s,
-                env=clean_env(),
+                env=self.agent_cfg.child_env(),
             )
         except subprocess.TimeoutExpired:
             return AgentResult(False, error="timed out", duration_s=time.time() - started)

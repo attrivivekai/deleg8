@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import os
 import shutil
 import sys
 import tempfile
@@ -51,9 +52,10 @@ def cmd_doctor(cfg: Config, _args) -> int:
 
     failures = 0
     print("deleg8 doctor")
-    for binary in ["git", "gh", cfg.coding_agent.provider.replace("claude_code", "claude")]:
+    for binary in ["git", "gh"]:
         (ok if shutil.which(binary) else bad)(f"{binary} on PATH")
         failures += not shutil.which(binary)
+    failures += check_harnesses(cfg)
     try:
         who = run(["gh", "api", "user", "--jq", ".login"]).stdout.strip()
         ok(f"GitHub API authenticated as {who}")
@@ -85,6 +87,49 @@ def cmd_doctor(cfg: Config, _args) -> int:
         bad(f"PM tool: {str(e).splitlines()[0][:160]}")
         failures += 1
     return 1 if failures else 0
+
+
+def check_harnesses(cfg: Config) -> int:
+    """Check each configured coding harness; for local models, also the model server and context size."""
+    import json
+    import urllib.request
+
+    from deleg8.agents.base import make_harness
+
+    failures, seen = 0, set()
+    for role in ("coding", "brain"):
+        h = make_harness(cfg, role)
+        key = (h.name, tuple(h.agent_cfg.command))
+        if key in seen:
+            continue
+        seen.add(key)
+        if h.name != "dsh":
+            exe = {"claude_code": "claude"}.get(h.name, h.name)
+            (ok if shutil.which(exe) else bad)(f"{role} harness: {exe} on PATH")
+            failures += not shutil.which(exe)
+            continue
+        cmd = h.base_command()
+        exists = all(Path(c).exists() for c in cmd if "/" in c) and (shutil.which(cmd[0]) or Path(cmd[0]).exists())
+        (ok if exists else bad)(f"{role} harness: dsh ({' '.join(cmd)})")
+        failures += not exists
+        info = h.model_info()
+        if info.get("error") or not info.get("model"):
+            bad(f"dsh model: {info.get('error', 'no agent-default-model')} in {info['home']}")
+            failures += 1
+            continue
+        ok(f"dsh model: {info['model']} via {info['provider']} ({info['base_url']})")
+        try:
+            with urllib.request.urlopen(f"{info['base_url'].rstrip('/')}/models", timeout=5) as r:
+                served = [m.get("id") for m in json.load(r).get("data", [])]
+            (ok if info["model"] in served else bad)(f"model server is up, serving {served}")
+            failures += info["model"] not in served
+        except Exception as e:
+            bad(f"model server not reachable at {info['base_url']} ({type(e).__name__}); start it in the panel")
+            failures += 1
+        ctx = info.get("context_window") or 0
+        if ctx and ctx < 65536:
+            print(f"  ! context window is {ctx} tokens; agentic coding needs ~64k+ (raise ctx in the local-ai panel)")
+    return failures
 
 
 def cmd_bootstrap(cfg: Config, args) -> int:
@@ -213,7 +258,13 @@ def cmd_status(cfg: Config, _args) -> int:
 
     tickets = make_pm(cfg).assigned()
     print(f"Open tickets assigned to {cfg.employee.name}:")
-    for t in sorted(tickets, key=lambda t: int(t.id) if t.id.isdigit() else t.id):
+    for t in sorted(
+        tickets,
+        key=lambda t: (
+            t.id.rsplit("-", 1)[0],
+            int(t.id.rsplit("-", 1)[-1] or 0) if t.id.rsplit("-", 1)[-1].isdigit() else 0,
+        ),
+    ):
         parent = f" (in #{t.parent})" if t.parent else ""
         print(f"  #{t.id:<4} {t.type:<6} {t.status:<12} {t.title[:70]}{parent}")
     print("\nRecent activity:")
@@ -253,6 +304,8 @@ def cmd_tool(cfg: Config, args) -> int:
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(prog="deleg8", description="AI junior employee harness")
     ap.add_argument("--config", default=None, help="path to deleg8.yaml")
+    ap.add_argument("--harness", default=None, help="use a named preset from `harnesses:` (e.g. dsh)")
+    ap.add_argument("--pm", default=None, help="override pm.provider (github | jira | plane)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("doctor")
     b = sub.add_parser("bootstrap")
@@ -273,7 +326,9 @@ def main(argv: list[str] | None = None) -> None:
     sub.add_parser("mcp")
     args = ap.parse_args(argv)
 
-    cfg = load_config(args.config)
+    cfg = load_config(args.config, harness=args.harness)
+    if args.pm or os.environ.get("DELEG8_PM"):
+        cfg.pm["provider"] = args.pm or os.environ["DELEG8_PM"]
     if args.cmd == "mcp":
         from deleg8.mcp_server import build_server
         from deleg8.tools import Tools

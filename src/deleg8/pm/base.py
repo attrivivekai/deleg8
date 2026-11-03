@@ -46,6 +46,14 @@ class ProjectManager(ABC):
     @abstractmethod
     def mark_planned(self, ticket_id: str) -> None: ...
 
+    def ref(self, ticket_id: str) -> str:
+        """How to refer to a ticket in commits, PRs and comments."""
+        return str(ticket_id)
+
+    def closes(self, ticket: Ticket) -> str:
+        """PR-body line linking the ticket (GitHub uses `Closes #N` to auto-close)."""
+        return f"Ticket: [{ticket.id}]({ticket.url})"
+
     def setup(self) -> None:  # noqa: B027 - optional hook
         """Create labels/fields the harness relies on (idempotent)."""
 
@@ -60,6 +68,10 @@ def make_pm(cfg) -> ProjectManager:
         from deleg8.pm.github import GitHubIssues
 
         return GitHubIssues(**cfg.pm.get("github", {}))
+    if provider == "plane":
+        from deleg8.pm.plane import Plane
+
+        return Plane(**cfg.pm.get("plane", {}))
     if provider == "jira":
         from deleg8.pm.jira import Jira
 

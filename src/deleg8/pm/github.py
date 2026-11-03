@@ -66,6 +66,12 @@ class GitHubIssues(ProjectManager):
         data = gh_json(["issue", "list", "-R", self.repo, "--limit", "200", "--json", FIELDS, *args])
         return [self._to_ticket(d) for d in data or []]
 
+    def ref(self, ticket_id: str) -> str:
+        return f"#{ticket_id}"
+
+    def closes(self, ticket: Ticket) -> str:
+        return f"Closes #{ticket.id}"
+
     # ------------------------------------------------------------- reads
     def assigned(self) -> list[Ticket]:
         return self._list("--label", ASSIGN_LABEL, "--state", "open")

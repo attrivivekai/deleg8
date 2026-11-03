@@ -1,0 +1,41 @@
+# CircleCI pipeline (optional alternative/addition to .github/workflows/ci.yml).
+# Inactive until the repo is connected in CircleCI (free plan: 30,000 credits/month).
+# Its checks appear on PRs as "ci/circleci: test" and "ci/circleci: docker"; deleg8 waits on them like any check.
+version: 2.1
+
+jobs:
+  test:
+    docker:
+      - image: cimg/python:3.12
+    steps:
+      - checkout
+      - run:
+          name: Install uv
+          command: pip install --user uv
+      - run:
+          name: Install dependencies
+          command: uv sync
+      - run:
+          name: Lint
+          command: uv run ruff check . && uv run ruff format --check .
+      - run:
+          name: Tests
+          command: uv run pytest -q
+      - run:
+          name: Static export smoke test
+          command: BASE_PATH=/deleg8-website uv run python scripts/freeze.py dist
+
+  docker:
+    machine:
+      image: ubuntu-2204:current
+    steps:
+      - checkout
+      - run:
+          name: Build image
+          command: docker build -t deleg8-website:ci .
+
+workflows:
+  ci:
+    jobs:
+      - test
+      - docker

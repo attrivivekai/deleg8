@@ -133,6 +133,7 @@ class Employee:
 
     # ============================================================ planning
     def plan(self, t: Ticket) -> None:
+        t = self.pm.get(t.id)  # full ticket incl. latest discussion (e.g. answers to my questions)
         self.pm.set_status(t.id, "in-progress")
         self.pm.comment(
             t.id, "👋 I've picked this up. Researching the codebase, wiki and data before planning.", self.sig
@@ -164,8 +165,8 @@ class Employee:
         for i, task in enumerate(plan["tasks"]):
             deps = [created[d].id for d in task.get("depends_on", []) if 0 <= d < i]
             ac = "\n".join(f"- [ ] {c}" for c in task["acceptance_criteria"])
-            body = f"{task['description']}\n\n**Acceptance criteria**\n{ac}\n\nPart of #{t.id}" + (
-                f" · Depends on {', '.join('#' + d for d in deps)}" if deps else ""
+            body = f"{task['description']}\n\n**Acceptance criteria**\n{ac}\n\nPart of {self.pm.ref(t.id)}" + (
+                f" · Depends on {', '.join(self.pm.ref(d) for d in deps)}" if deps else ""
             )
             child = self.pm.create(
                 "task",
@@ -175,9 +176,9 @@ class Employee:
                 meta={"depends_on": deps, "repo": task.get("repo") or repo.name},
             )
             created.append(child)
-            self.journal.log(t.id, "task", f"created #{child.id}: {child.title}", link=child.url)
+            self.journal.log(t.id, "task", f"created {self.pm.ref(child.id)}: {child.title}", link=child.url)
 
-        tasks_md = "\n".join(f"{i}. #{c.id} {c.title}" for i, c in enumerate(created, 1))
+        tasks_md = "\n".join(f"{i}. {self.pm.ref(c.id)} {c.title}" for i, c in enumerate(created, 1))
         self.pm.comment(
             t.id,
             f"📋 **Plan**\n\n{plan['understanding']}\n\n**Tasks** (each ships as its own PR):\n"
@@ -191,6 +192,7 @@ class Employee:
         return "\n".join(f"  - `{c}`" for c in repo.checks) or "  - (no checks configured)"
 
     def execute(self, t: Ticket) -> None:
+        t = self.pm.get(t.id)
         repo = self.cfg.repo(t.repo)
         branch = f"deleg8/{t.id}-{slugify(t.title)}"
         self.pm.set_status(t.id, "in-progress")
@@ -229,8 +231,9 @@ class Employee:
                 f"the ticket.\n\n{result['summary']}"
             )
 
-        subject = re.sub(rf"\s*\(#{t.id}\)\s*$", "", result["commit_message"].strip())
-        message = f"{subject} (#{t.id})"
+        ref = self.pm.ref(t.id)
+        subject = re.sub(rf"\s*\({re.escape(ref)}\)\s*$", "", result["commit_message"].strip())
+        message = f"{subject} ({ref})"
         ws.commit_and_push(branch, message)
         prs = GitHubPRs(repo)
         pr = prs.open(branch, message, self._pr_body(t, result, ws))
@@ -270,7 +273,7 @@ class Employee:
     def _pr_body(self, t: Ticket, result: dict, ws: Workspace) -> str:
         notes = f"\n\n### Notes for the ticket\n{result['ticket_notes']}" if result.get("ticket_notes") else ""
         return (
-            f"Closes #{t.id}\n\n### What & why\n{result['summary']}\n\n### Verification\n{result['tests']}"
+            f"{self.pm.closes(t)}\n\n### What & why\n{result['summary']}\n\n### Verification\n{result['tests']}"
             f"{notes}\n\n```\n{ws.diffstat_vs_base()}\n```\n\n---\n{self.sig}"
         )
 
@@ -320,7 +323,7 @@ class Employee:
                 )
                 self._account(t, "fix", fx, "addressing review comments")
                 self._until_checks_pass(t, ws, result)
-                ws.commit_and_push(branch, f"fix: address review feedback (#{t.id})")
+                ws.commit_and_push(branch, f"fix: address review feedback ({self.pm.ref(t.id)})")
 
         # ---- CI
         if policy.wait_for_ci:
@@ -343,7 +346,7 @@ class Employee:
                 )
                 self._account(t, "fix", fx, "fixing CI failure")
                 self._until_checks_pass(t, ws, result)
-                ws.commit_and_push(branch, f"fix: make CI green (#{t.id})")
+                ws.commit_and_push(branch, f"fix: make CI green ({self.pm.ref(t.id)})")
 
         # ---- merge (or hand over to a human, per policy)
         if not policy.auto_merge:
@@ -396,7 +399,7 @@ class Employee:
             f"{(last - first) / 60:.1f} min\n- model cost: ${cost:.2f}"
         )
         kids_md = "\n\n".join(
-            f"### #{k.id} {k.title}\n{k.url}\nEvidence trail (harness journal):\n"
+            f"### {self.pm.ref(k.id)} {k.title}\n{k.url}\nEvidence trail (harness journal):\n"
             + "\n".join(f"- {line}" for line in self.journal.trail(k.id))
             + "\n\nCompletion note:\n"
             + next((c.body for c in reversed(k.comments) if c.by_agent and "Done" in c.body), "")[:2000]

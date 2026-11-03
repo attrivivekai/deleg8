@@ -45,13 +45,13 @@ This repo ships a whole **"company in a box"**, so the employee has a real workp
 | piece | what | tech (free / open source) |
 |---|---|---|
 | Website repo | [`attrivivekai/deleg8-website`](https://github.com/attrivivekai/deleg8-website): deleg8's marketing site + waitlist | FastAPI, Jinja2, SQLAlchemy |
-| Project management | GitHub Issues with epics/stories/tasks/bugs as labels + sub-issues | GitHub Issues (Jira adapter included) |
-| CI | lint + format + tests + static-export smoke test on every PR | GitHub Actions |
+| Project management | GitHub Issues with epics/stories/tasks/bugs as labels + sub-issues | GitHub Issues · Plane (OSS, self-host) · Jira |
+| CI | lint + format + tests + static-export smoke test on every PR | GitHub Actions · CircleCI |
 | CD | merge to `main` → static snapshot on GitHub Pages + Docker image to GHCR | GitHub Pages, GHCR |
 | Production DB | seeded waitlist, read-only role `dex_readonly` | Postgres 16 (Docker) |
 | Warehouse | demo requests, web sessions, MRR | DuckDB |
 | Team wiki | handbook, brand voice, pricing decisions, data docs | Markdown (`demo/wiki`) |
-| Coding harness | implements tasks | Claude Code headless (`claude -p`) or pi |
+| Coding harness | implements tasks | Claude Code headless (`claude -p`), pi, or DeepSeek Harness (dsh) on **local models** |
 
 The seed backlog (`demo/tickets/seed.yaml`) is written like real PM tickets, and each one tests a different skill:
 
@@ -77,6 +77,9 @@ uv run deleg8 status                     # board + activity journal
 
 Work a specific ticket immediately: `uv run deleg8 run --ticket 3`.
 
+Swap tools per run without editing config: `--harness dsh` (local models via DeepSeek Harness),
+`--pm plane` / `--pm jira`. Setup steps for local models, Plane and CircleCI are in **[docs/integrations.md](docs/integrations.md)**.
+
 ## Configuration (`deleg8.yaml`)
 
 One file onboards an employee: identity, PM tool, repos (with setup + check commands), research access,
@@ -92,7 +95,8 @@ policy:
 
 ## Design notes
 
-* **Tool-agnostic core.** `pm/` (GitHub Issues, Jira), `agents/` (Claude Code, pi) and `tools.py` are adapters.
+* **Tool-agnostic core.** `pm/` (GitHub Issues, Plane, Jira), `agents/` (Claude Code, pi, dsh), CI log readers
+  (Actions, CircleCI) and `tools.py` are adapters.
   A new PM tool or harness is roughly 150 lines.
 * **Same tools over MCP and CLI.** Claude Code gets the research tools as an MCP server (`deleg8 mcp`). Shell-only
   harnesses (pi) call `deleg8 tool db-query warehouse "SELECT ..."`.
@@ -109,8 +113,9 @@ policy:
 ```
 src/deleg8/
   employee.py      the workflow / state machine
-  pm/              github.py (Issues + sub-issues), jira.py (Jira Cloud REST v3)
-  agents/          claude_code.py, pi.py
+  pm/              github.py (Issues + sub-issues), plane.py (Plane REST v1), jira.py (Jira Cloud REST v3)
+  agents/          claude_code.py, pi.py, dsh.py (DeepSeek Harness / local models)
+  circleci.py      CircleCI failure logs for the CI fix loop
   tools.py         wiki / SQL / ticket research tools   mcp_server.py   MCP wrapper
   scm.py           workspaces, git, PRs, CI checks, merge
   prompts.py       phase prompts + JSON output schemas
@@ -127,5 +132,7 @@ tests/             offline tests of the whole workflow with fake PM/harness/CI
 
 * Runs tasks sequentially. Parallel tasks would use one git worktree per task.
 * The employee acts through your `gh` identity, so give it a dedicated bot account / GitHub App in production.
-* The Jira adapter is implemented against the documented REST v3 API but wasn't exercised in this POC (no Jira site).
+* The Jira and Plane adapters are tested offline (Plane against a fake of its REST API built from Plane's source)
+  but not yet against a live Jira site or Plane instance. The dsh adapter is verified against the installed dsh
+  (`--dump-config`) and a fake binary, but hasn't run a full ticket on a local model yet.
 * Add Slack/email escalation, a web dashboard, and per-ticket budget caps (the harness already passes `--max-budget-usd`).
