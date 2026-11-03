@@ -47,7 +47,7 @@ brain:
   timeout_s: 900
 
 policy:
-  auto_merge: true        # false = every PR waits for a human approval
+  auto_merge: false       # every PR waits for a human (repo owner) review + merge
   ai_review: true
   wait_for_ci: true
   ci_timeout_s: 1200
