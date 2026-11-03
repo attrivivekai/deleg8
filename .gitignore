@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+.deleg8/
+*.duckdb
+*.duckdb.wal
+.pytest_cache/
+.ruff_cache/
+demo/website/.venv/
+demo/website/uv.lock.bak

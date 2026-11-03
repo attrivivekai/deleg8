@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+  <div class="wrap">
+    <p class="eyebrow">AI employees for engineering teams</p>
+    <h1>Hire an AI junior engineer that works straight from your tickets.</h1>
+    <p class="lede">
+      deleg8 connects a coding harness to your project tracker, repos, database, warehouse
+      and wiki. Assign a ticket, and it researches, plans, codes, tests, opens a pull request
+      and reports back, just like a junior teammate.
+    </p>
+    <div class="cta-row">
+      <a class="btn" href="#waitlist">Join the waitlist</a>
+      <a class="btn btn-ghost" href="{{ url('/how-it-works') }}">See how it works</a>
+    </div>
+  </div>
+</section>
+
+<section class="wrap steps">
+  {% for title, body in steps %}
+  <article class="step">
+    <span class="step-num">{{ loop.index }}</span>
+    <h3>{{ title }}</h3>
+    <p>{{ body }}</p>
+  </article>
+  {% endfor %}
+</section>
+
+<section id="waitlist" class="wrap waitlist">
+  <h2>Get early access</h2>
+  <p>We're onboarding design partners now. Tell us about your team.</p>
+  <form class="card form" method="post" action="{{ url('/waitlist') }}" data-api="{{ url('/api/waitlist') }}">
+    <label>Work email <input type="email" name="email" required placeholder="you@company.com"></label>
+    <label>Company <input type="text" name="company" placeholder="Acme Inc."></label>
+    <label>Team size
+      <select name="team_size">
+        {% for s in team_sizes %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Interested plan
+      <select name="plan_interest">
+        {% for p in plans %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <button class="btn" type="submit">Request access</button>
+    <p class="form-msg" role="status"></p>
+  </form>
+</section>
+{% endblock %}

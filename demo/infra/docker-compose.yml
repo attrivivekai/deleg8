@@ -1,0 +1,19 @@
+# deleg8 demo company infrastructure: the "production" database the AI employee can read.
+services:
+  prod-db:
+    image: postgres:16-alpine
+    container_name: deleg8-prod-db
+    environment:
+      POSTGRES_USER: deleg8
+      POSTGRES_PASSWORD: deleg8
+      POSTGRES_DB: deleg8
+    ports: ["5434:5432"]
+    volumes:
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+      - prod-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U deleg8"]
+      interval: 2s
+      retries: 20
+volumes:
+  prod-pgdata:

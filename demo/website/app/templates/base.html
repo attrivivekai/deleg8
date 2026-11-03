@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}deleg8 — AI junior engineers that work your backlog{% endblock %}</title>
+  <meta name="description" content="deleg8 sets up AI junior employees that pick up tickets, research, code, test, open PRs and report back.">
+  <link rel="stylesheet" href="{{ url('/static/style.css') }}">
+</head>
+<body>
+  <header class="nav">
+    <div class="wrap nav-inner">
+      <a class="logo" href="{{ url('/') }}">deleg<span>8</span></a>
+      <nav>
+        <a href="{{ url('/how-it-works') }}">How it works</a>
+        <a href="{{ url('/pricing') }}">Pricing</a>
+        <a class="btn btn-small" href="{{ url('/') }}#waitlist">Join waitlist</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="footer">
+    <div class="wrap">
+      <p>&copy; 2026 deleg8 · AI employees, delegated.</p>
+    </div>
+  </footer>
+  <script>window.DELEG8_STATIC = {{ 'true' if static_mode else 'false' }};</script>
+  <script src="{{ url('/static/app.js') }}"></script>
+</body>
+</html>

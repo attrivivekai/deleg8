@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}How it works · deleg8{% endblock %}
+{% block content %}
+<section class="wrap page">
+  <h1>How a deleg8 AI junior works</h1>
+  <p class="lede">The same loop a new hire follows, minus the onboarding weeks.</p>
+  <ol class="timeline">
+    {% for title, body in steps %}
+    <li><h3>{{ title }}</h3><p>{{ body }}</p></li>
+    {% endfor %}
+  </ol>
+  <h2>What it connects to</h2>
+  <ul class="pills">
+    <li>GitHub Issues</li><li>Jira</li><li>GitHub</li><li>GitHub Actions</li>
+    <li>Postgres</li><li>DuckDB</li><li>Markdown wikis</li><li>Claude Code</li><li>pi</li><li>Any MCP server</li>
+  </ul>
+</section>
+{% endblock %}

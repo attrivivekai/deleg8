@@ -1,0 +1,59 @@
+# deleg8 configuration: one file onboards an AI employee onto a team's tools.
+employee:
+  name: Dex
+  title: Junior Software Engineer (AI)
+
+# Where work comes from. github = GitHub Issues (free). See src/deleg8/pm/jira.py for Jira Cloud.
+pm:
+  provider: github
+  github:
+    repo: attrivivekai/deleg8-website
+
+# Repos the employee may change. `checks` must pass locally before a PR is opened.
+repos:
+  - name: deleg8-website
+    github: attrivivekai/deleg8-website
+    default_branch: main
+    deploy_url: https://attrivivekai.github.io/deleg8-website/
+    setup: ["uv sync -q"]
+    checks:
+      - "uv run ruff check ."
+      - "uv run ruff format --check ."
+      - "uv run pytest -q"
+
+# Research access (all read-only).
+knowledge:
+  wiki_dirs: [demo/wiki]
+  databases:
+    app:
+      url: postgresql://dex_readonly:dex_readonly@localhost:5434/deleg8
+      description: Production Postgres for the website (waitlist_signups). Read-only role.
+    warehouse:
+      url: duckdb:///demo/warehouse/warehouse.duckdb
+      description: Analytics warehouse (demo_requests, web_sessions, mrr_monthly).
+
+# The harness that writes code. provider: claude_code | pi
+coding_agent:
+  provider: claude_code
+  model: claude-sonnet-5-5
+  max_budget_usd: 5
+  timeout_s: 1800
+
+# The harness used for planning, code review and reports (read-only tools only).
+brain:
+  provider: claude_code
+  model: claude-opus-5-5
+  max_budget_usd: 3
+  timeout_s: 900
+
+policy:
+  auto_merge: true        # false = every PR waits for a human approval
+  ai_review: true
+  wait_for_ci: true
+  ci_timeout_s: 1200
+  max_fix_attempts: 2
+  max_review_rounds: 2
+  max_tasks_per_run: 10
+  max_tasks_per_epic: 6
+
+workspace: .deleg8/workspaces

@@ -1,0 +1,57 @@
+# Seed backlog for the deleg8-website project. `deleg8 seed` creates these in the PM tool.
+# `assign: true` adds the `deleg8` label, which assigns the ticket to the AI employee.
+tickets:
+  - key: bug-email
+    type: bug
+    assign: true
+    title: "Waitlist accepts invalid emails like `foo@` and `@bar.com`"
+    body: |
+      Sales noticed garbage addresses in the waitlist export. The only check today is "contains an @".
+
+      **Expected:** the waitlist form and `POST /api/waitlist` reject obviously invalid addresses with a 422
+      and the existing friendly message.
+
+      **Acceptance criteria**
+      - Reject: missing local part, missing domain, more than one `@`, whitespace, domain without a dot.
+      - Accept: normal addresses including `+` tags and subdomains (e.g. `ada+beta@mail.acme.io`).
+      - Unit tests covering the cases above.
+      - In your completion comment, report **how many rows in the production `waitlist_signups` table
+        would fail the new validation** (count only, no raw emails, see data/production-db.md in the wiki).
+
+  - key: epic-changelog
+    type: epic
+    assign: true
+    title: "Public changelog page"
+    body: |
+      Prospects keep asking "what's new?". We want a public changelog on the website.
+
+      **Goals**
+      - A `/changelog` page listing product updates, newest first, each with date, title and one-line summary.
+      - Linked from the main navigation and the footer.
+      - Content must come from the company timeline in the wiki (`company/timeline.md`). Only **public**
+        milestones go on the page.
+      - Copy must follow the brand voice in the wiki (`company/about.md`).
+      - Must work on the GitHub Pages static preview.
+
+      **Out of scope:** RSS, CMS/admin editing.
+
+  - key: epic-pricing
+    type: epic
+    assign: true
+    title: "Data-driven pricing page: 'Most popular' badge + FAQ"
+    body: |
+      Marketing wants the pricing page to convert better.
+
+      1. Highlight exactly one plan with a "Most popular" badge. Pick the plan using the definition in
+         the wiki (`product/pricing.md`, `data/warehouse.md`) and **the actual warehouse data**. Record the
+         query and the result in the ticket so we can audit the decision.
+      2. Add an FAQ section below the plans using the approved answers in the wiki, verbatim.
+
+      Both must be covered by tests and look right on mobile.
+
+  - key: story-vague
+    type: story
+    assign: false   # flip the `deleg8` label on to see the AI junior ask clarifying questions
+    title: "Make the website better for enterprise"
+    body: |
+      Enterprise folks don't seem convinced. Can we improve things?

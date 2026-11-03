@@ -1,0 +1,18 @@
+# Full dynamic stack: website + Postgres. `docker compose up --build` -> http://localhost:8000
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: deleg8
+      POSTGRES_PASSWORD: deleg8
+      POSTGRES_DB: deleg8
+    ports: ["5433:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+  web:
+    build: .
+    environment:
+      DATABASE_URL: postgresql+psycopg://deleg8:deleg8@db:5432/deleg8
+    ports: ["8000:8000"]
+    depends_on: [db]
+volumes:
+  pgdata:
