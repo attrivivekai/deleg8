@@ -52,6 +52,10 @@ class Journal:
             "SELECT ts, ticket, phase, message, cost_usd, link FROM events ORDER BY id DESC LIMIT ?", (limit,)
         ).fetchall()[::-1]
 
+    def trail(self, ticket: str) -> list[str]:
+        rows = self.db.execute("SELECT phase, message FROM events WHERE ticket = ? ORDER BY id", (str(ticket),))
+        return [f"{phase}: {msg}" for phase, msg in rows]
+
     def all(self) -> list[tuple]:
         return self.db.execute(
             "SELECT ts, ticket, phase, message, cost_usd, duration_s, link FROM events ORDER BY id"

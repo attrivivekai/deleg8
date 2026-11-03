@@ -135,3 +135,11 @@ def test_no_auto_merge_hands_off_to_human(cfg, fakes):
     emp.run_once()
     assert FakePRs.merged == []
     assert "Waiting for a human" in pm.get(t.id).comments[-1].body
+
+
+def test_commit_message_ticket_suffix_not_duplicated(cfg, fakes):
+    work = {**WORK, "commit_message": "feat: thing (#1)"}
+    pm, emp, _, _ = make(cfg, fakes, {"review": [APPROVE]}, work=work)
+    pm.add("task", "Thing")
+    emp.run_once()
+    assert FakeWorkspace.instances[-1].pushed[0] == "feat: thing (#1)"

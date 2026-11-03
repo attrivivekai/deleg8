@@ -65,6 +65,10 @@ class Workspace:
     def diffstat_vs_base(self) -> str:
         return self.git("diff", "--stat", f"origin/{self.repo.default_branch}...HEAD")
 
+    def changed_files(self) -> list[str]:
+        out = self.git("diff", "--name-only", f"origin/{self.repo.default_branch}...HEAD")
+        return out.splitlines() if out else []
+
     def commit_and_push(self, branch: str, message: str) -> bool:
         if self.has_changes():
             self.git("add", "-A")

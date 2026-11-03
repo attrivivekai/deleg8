@@ -9,6 +9,7 @@ all tasks done ─► completion report on the epic ─► epic done
 
 from __future__ import annotations
 
+import re
 import time
 from datetime import datetime
 
@@ -228,13 +229,16 @@ class Employee:
                 f"the ticket.\n\n{result['summary']}"
             )
 
-        message = f"{result['commit_message']} (#{t.id})"
+        subject = re.sub(rf"\s*\(#{t.id}\)\s*$", "", result["commit_message"].strip())
+        message = f"{subject} (#{t.id})"
         ws.commit_and_push(branch, message)
         prs = GitHubPRs(repo)
         pr = prs.open(branch, message, self._pr_body(t, result, ws))
         self.pm.set_status(t.id, "in-review")
         self.pm.comment(t.id, f"🔀 Opened PR {pr['url']}. Next: AI code review, then CI.", self.sig)
-        self.journal.log(t.id, "pr", f"opened PR #{pr['number']}", link=pr["url"])
+        files = ws.changed_files()
+        self.journal.log(t.id, "pr", f"opened PR #{pr['number']} ({len(files)} files)", link=pr["url"])
+        self.journal.log(t.id, "files", ", ".join(files)[:500])
         self._review_ci_merge(t, ws, prs, pr, result)
 
     def _until_checks_pass(self, t: Ticket, ws: Workspace, result: dict) -> dict:
@@ -392,10 +396,22 @@ class Employee:
             f"{(last - first) / 60:.1f} min\n- model cost: ${cost:.2f}"
         )
         kids_md = "\n\n".join(
-            f"### #{k.id} {k.title}\n{k.url}\n"
-            + next((c.body for c in reversed(k.comments) if c.by_agent and "Done" in c.body), "")[:2500]
+            f"### #{k.id} {k.title}\n{k.url}\nEvidence trail (harness journal):\n"
+            + "\n".join(f"- {line}" for line in self.journal.trail(k.id))
+            + "\n\nCompletion note:\n"
+            + next((c.body for c in reversed(k.comments) if c.by_agent and "Done" in c.body), "")[:2000]
             for k in kids
         )
+        deploys = []
+        for repo in self.cfg.repos:
+            run_ = GitHubPRs(repo).latest_deploy() if repo.deploy_url else None
+            if run_:
+                deploys.append(
+                    f"- {repo.name}: latest deploy run {run_.get('status')}/{run_.get('conclusion')} "
+                    f"{run_.get('url')} -> {repo.deploy_url}"
+                )
+        if deploys:
+            stats += "\n" + "\n".join(deploys)
         res = self.brain.think(
             report_prompt(t.context_markdown(max_comments=4), kids_md, stats),
             REPORT_SCHEMA,

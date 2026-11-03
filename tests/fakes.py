@@ -107,6 +107,9 @@ class FakeWorkspace:
     def diffstat_vs_base(self):
         return "1 file changed"
 
+    def changed_files(self):
+        return ["app/main.py", "tests/test_main.py"]
+
     def commit_and_push(self, branch, message):
         self.pushed.append(message)
         return True
@@ -130,6 +133,9 @@ class FakePRs:
 
     def wait_for_checks(self, number, timeout_s):
         return FakePRs.ci_results.pop(0) if FakePRs.ci_results else CheckResult("pass", "test=pass")
+
+    def latest_deploy(self, workflow="deploy.yml"):
+        return {"status": "completed", "conclusion": "success", "url": "https://gh/run/1"}
 
     def merge(self, number):
         FakePRs.merged.append(number)
